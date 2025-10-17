@@ -1,0 +1,3 @@
+# DVC ignore
+.git
+.dvc
