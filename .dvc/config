@@ -1,0 +1,4 @@
+[core]
+    remote = myremote
+['remote "myremote"']
+    url = gs://iris-mlops-dvc-mehtavishwas989-1760678324/iris-project
