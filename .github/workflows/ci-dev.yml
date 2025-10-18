@@ -1,0 +1,77 @@
+name: CI Pipeline - Dev Branch
+
+on:
+  push:
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  test-and-evaluate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Set up DVC
+        uses: iterative/setup-dvc@v1
+      
+      - name: Configure GCS credentials
+        run: |
+          echo '${{ secrets.GCP_CREDENTIALS }}' > $HOME/gcs-credentials.json
+          export GOOGLE_APPLICATION_CREDENTIALS=$HOME/gcs-credentials.json
+      
+      - name: Pull model from DVC
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /home/runner/gcs-credentials.json
+        run: |
+          dvc remote modify myremote credentialpath /home/runner/gcs-credentials.json
+          dvc pull
+      
+      - name: Run pytest tests
+        run: |
+          pytest tests/ -v --tb=short
+      
+      - name: Evaluate model
+        run: |
+          python src/evaluate.py > evaluation_report.txt
+          cat evaluation_report.txt
+      
+      - name: Setup CML
+        uses: iterative/setup-cml@v2
+      
+      - name: Create CML Report
+        env:
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "## 📊 Model Evaluation Report - Dev Branch" > report.md
+          echo "" >> report.md
+          echo "### ✅ Test Results" >> report.md
+          echo "\`\`\`" >> report.md
+          cat evaluation_report.txt >> report.md
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+          echo "**Branch:** ${{ github.ref_name }}" >> report.md
+          echo "**Commit:** ${{ github.sha }}" >> report.md
+          
+          cml comment create report.md
